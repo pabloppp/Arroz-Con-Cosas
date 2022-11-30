@@ -17,7 +17,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.multiprocessing as mp
 
-from arroz import Diffuzz, VQModel, DiffusionModel, to_latent, from_latent, sample
+from arroz import Diffuzz, VQModel, DiffusionModel, to_latent, from_latent
 from arroz.utils import WebdatasetFilter
 
 # PARAMETERS
@@ -178,7 +178,7 @@ def train(gpu_id, world_size, n_nodes):
             noised_xq, noise = diffuzz.diffuse(qe, t)
 
         with torch.cuda.amp.autocast():
-            pred_noise = model(noised_xq, image_embeddings, t)
+            pred_noise = model(noised_xq, t, image_embeddings)
             loss = criterion(pred_noise, noise)
             loss_adjusted = loss / grad_accum_steps
 
@@ -226,10 +226,10 @@ def train(gpu_id, world_size, n_nodes):
                 qe = to_latent(images, vqmodel)
                 noised_xq, noise = diffuzz.diffuse(qe, t)
 
-                pred_noise = model(noised_xq, image_embeddings, t)
+                pred_noise = model(noised_xq, t, image_embeddings)
                 pred = diffuzz.undiffuse(noised_xq, t, torch.zeros_like(t), pred_noise)
-                sampled = sample(diffuzz, model, image_embeddings, device=device)[-1]
-                sampled_ema = sample(diffuzz, model_ema, image_embeddings, device=device)[-1]
+                sampled = diffuzz.sample(model, {'c': image_embeddings}, (image_embeddings.size(0), 4, 64, 64),)[-1]
+                sampled_ema = diffuzz.sample(model_ema, {'c': image_embeddings}, (image_embeddings.size(0), 4, 64, 64),)[-1]
 
                 noised_images = from_latent(noised_xq, vqmodel).clamp(0, 1)
                 pred_images = from_latent(pred, vqmodel).clamp(0, 1)

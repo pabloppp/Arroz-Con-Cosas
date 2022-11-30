@@ -178,7 +178,7 @@ class PriorModel(nn.Module):
             emb = nn.functional.pad(emb, (0, 1), mode='constant')
         return emb
         
-    def forward(self, x, c, r):
+    def forward(self, x, r, c):
         r = self.gen_r_embedding(r)
         x_prev = None
         for i, block in enumerate(self.blocks):
@@ -262,7 +262,7 @@ class DiffusionModel(nn.Module):
                     x = block(x)
         return x
 
-    def forward(self, x, c, r): # r is a uniform value between 0 and 1
+    def forward(self, x, r, c): # r is a uniform value between 0 and 1
         r_embed = self.gen_r_embedding(r)
         x = self.embedding(x)
         s = torch.cat([c, r_embed], dim=1)[:, :, None, None]
@@ -282,32 +282,3 @@ def to_latent(x, vqmodel):
 
 def from_latent(x, vqmodel):
     return vqmodel.decode(x)
-
-def sample(diffuzz, model, c, t_start=1.0, t_end=0.0, timesteps=20, size=(64, 64), x_init=None, mode='ddpm', inpaint_mask=None, x_orig=None, cfg=3.0, device='cpu'):
-    r_range = torch.linspace(t_start, t_end, timesteps+1)[:, None].expand(-1, c.size(0)).to(device)
-    x = torch.randn(c.size(0), 4, *size, device=device) if x_init is None else x_init.clone()
-    preds = []
-    for i in range(0, timesteps):
-        if inpaint_mask is not None and x_orig is not None:
-            x_renoised, _ = diffuzz.diffuse(x_orig, r_range[i])
-            x = x * inpaint_mask + x_renoised * (1-inpaint_mask)
-        pred_noise = model(x, c, r_range[i])
-        if cfg is not None:
-            pred_noise_unconditional = model(x, torch.zeros_like(c), r_range[i])
-            pred_noise = torch.lerp(pred_noise_unconditional, pred_noise, cfg)
-        x = diffuzz.undiffuse(x, r_range[i], r_range[i+1], pred_noise, mode=mode)
-        preds.append(x)
-    return preds
-
-def sample_prior(diffuzz, model, c, t_start=1.0, t_end=0.0, timesteps=10, mode='ddpm', cfg=3.0, device='cpu'):
-    r_range = torch.linspace(t_start, t_end, timesteps+1)[:, None].expand(-1, c.size(0)).to(device)
-    x = torch.randn(c.size(0), 1024, device=device)
-    preds = []
-    for i in range(0, timesteps):
-        pred_noise = model(x, c, r_range[i])
-        if cfg is not None:
-            pred_noise_unconditional = model(x, torch.zeros_like(c), r_range[i])
-            pred_noise = torch.lerp(pred_noise_unconditional, pred_noise, cfg)
-        x = diffuzz.undiffuse(x, r_range[i], r_range[i+1], pred_noise, mode=mode)
-        preds.append(x)
-    return preds

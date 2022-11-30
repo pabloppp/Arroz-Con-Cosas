@@ -171,7 +171,7 @@ def train(gpu_id, world_size, n_nodes):
             noised_image_embeddings, noise = diffuzz.diffuse(image_embeddings, t)
 
         with torch.cuda.amp.autocast():
-            pred_noise = model(noised_image_embeddings, text_embeddings, t)
+            pred_noise = model(noised_image_embeddings, t, text_embeddings)
             loss = criterion(pred_noise, noise)
             loss_adjusted = loss / grad_accum_steps
 
