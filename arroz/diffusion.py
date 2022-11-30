@@ -74,7 +74,7 @@ class Diffuzz():
         else:
             raise ValueError("Sampler should be either a string or a SimpleSampler object.")
         preds = []
-        x = sampler.init_x(shape) if x_init is None else x_init.clone()
+        x = sampler.init_x(shape) if x_init is None or mask is not None else x_init.clone()
         for i in range(0, timesteps):
             if mask is not None and x_init is not None:
                 x_renoised, _ = self.diffuse(x_init, r_range[i])
