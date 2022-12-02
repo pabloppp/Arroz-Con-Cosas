@@ -1,6 +1,59 @@
 import torch
 
+# Custom simplified foward/backward diffusion (cosine schedule)
+class Diffuzz():
+    def __init__(self, s=0.008, device="cpu"):
+        self.device = device
+        self.s = torch.tensor([s]).to(device)
+        self._init_alpha_cumprod = torch.cos(self.s / (1 + self.s) * torch.pi * 0.5) ** 2
+
+    def _alpha_cumprod(self, t):
+        alpha_cumprod = torch.cos((t + self.s) / (1 + self.s) * torch.pi * 0.5) ** 2 / self._init_alpha_cumprod
+        return alpha_cumprod.clamp(0.0001, 0.9999)
+
+    def diffuse(self, x, t, noise=None): # t -> [0, 1]
+        if noise is None:
+            noise = torch.randn_like(x)
+        alpha_cumprod = self._alpha_cumprod(t).view(t.size(0), *[1 for _ in x.shape[1:]])
+        return alpha_cumprod.sqrt() * x + (1-alpha_cumprod).sqrt() * noise, noise
+
+    def undiffuse(self, x, t, t_prev, noise, sampler=None):
+        if sampler is None:
+            sampler = DDPMSampler(self)
+        return sampler(x, t, t_prev, noise)
+        
+    def sample(self, model, model_inputs, shape, t_start=1.0, t_end=0.0, timesteps=20, x_init=None, cfg=3.0, unconditional_inputs=None, sampler='ddpm'):
+        r_range = torch.linspace(t_start, t_end, timesteps+1)[:, None].expand(-1, shape[0] if x_init is None else x_init.size(0)).to(self.device)
+        # --- select the sampler
+        if isinstance(sampler, str):
+            if sampler in sampler_dict:
+                sampler = sampler_dict[sampler](self)
+            else:
+                raise ValueError(f"If sampler is a string it must be one of the supported samplers: {list(sampler_dict.keys())}")
+        elif issubclass(sampler, SimpleSampler):
+            sampler =  sampler(self)
+        else:
+            raise ValueError("Sampler should be either a string or a SimpleSampler object.")
+        # ---  
+        preds = []
+        x = sampler.init_x(shape) if x_init is None else x_init.clone()
+        for i in range(0, timesteps):
+            pred_noise = model(x, r_range[i], **model_inputs)
+            if cfg is not None:
+                if unconditional_inputs is None:
+                    unconditional_inputs = {k: torch.zeros_like(v) for k, v in model_inputs.items()}
+                pred_noise_unconditional = model(x, r_range[i], **unconditional_inputs)
+                pred_noise = torch.lerp(pred_noise_unconditional, pred_noise, cfg)
+            x = self.undiffuse(x, r_range[i], r_range[i+1], pred_noise, sampler=sampler)
+            preds.append(x)
+        return preds
+        
+    def p2_weight(self, t, k=1.0, gamma=1.0):
+        alpha_cumprod = self._alpha_cumprod(t)
+        return (k + alpha_cumprod / (1 - alpha_cumprod)) ** -gamma
+
 # Samplers --------------------------------------------------------------------
+
 class SimpleSampler():
     def __init__(self, diffuzz):
         self.current_step = -1
@@ -39,55 +92,3 @@ sampler_dict = {
     'ddpm': DDPMSampler,
     'ddim': DDIMSampler,
 }
-
-# Custom simplified foward/backward diffusion (cosine schedule)
-class Diffuzz():
-    def __init__(self, s=0.008, device="cpu"):
-        self.device = device
-        self.s = torch.tensor([s]).to(device)
-        self._init_alpha_cumprod = torch.cos(self.s / (1 + self.s) * torch.pi * 0.5) ** 2
-
-    def _alpha_cumprod(self, t):
-        alpha_cumprod = torch.cos((t + self.s) / (1 + self.s) * torch.pi * 0.5) ** 2 / self._init_alpha_cumprod
-        return alpha_cumprod.clamp(0.0001, 0.9999)
-
-    def diffuse(self, x, t, noise=None): # t -> [0, 1]
-        if noise is None:
-            noise = torch.randn_like(x)
-        alpha_cumprod = self._alpha_cumprod(t).view(t.size(0), *[1 for _ in x.shape[1:]])
-        return alpha_cumprod.sqrt() * x + (1-alpha_cumprod).sqrt() * noise, noise
-
-    def undiffuse(self, x, t, t_prev, noise, sampler=None):
-        if sampler is None:
-            sampler = DDPMSampler(self)
-        return sampler(x, t, t_prev, noise)
-
-    def sample(self, model, model_inputs, shape, t_start=1.0, t_end=0.0, timesteps=20, x_init=None, cfg=3.0, unconditional_inputs=None, sampler='ddpm'):
-        r_range = torch.linspace(t_start, t_end, timesteps+1)[:, None].expand(-1, shape[0] if x_init is None else x_init.size(0)).to(self.device)
-        # --- select the sampler
-        if isinstance(sampler, str):
-            if sampler in sampler_dict:
-                sampler = sampler_dict[sampler](self)
-            else:
-                raise ValueError(f"If sampler is a string it must be one of the supported samplers: {list(sampler_dict.keys())}")
-        elif issubclass(sampler, SimpleSampler):
-            sampler =  sampler(self)
-        else:
-            raise ValueError("Sampler should be either a string or a SimpleSampler object.")
-        # ---  
-        preds = []
-        x = sampler.init_x(shape) if x_init is None else x_init.clone()
-        for i in range(0, timesteps):
-            pred_noise = model(x, r_range[i], **model_inputs)
-            if cfg is not None:
-                if unconditional_inputs is None:
-                    unconditional_inputs = {k: torch.zeros_like(v) for k, v in model_inputs.items()}
-                pred_noise_unconditional = model(x, r_range[i], **unconditional_inputs)
-                pred_noise = torch.lerp(pred_noise_unconditional, pred_noise, cfg)
-            x = self.undiffuse(x, r_range[i], r_range[i+1], pred_noise, sampler=sampler)
-            preds.append(x)
-        return preds
-        
-    def p2_weight(self, t, k=1.0, gamma=1.0):
-        alpha_cumprod = self._alpha_cumprod(t)
-        return (k + alpha_cumprod / (1 - alpha_cumprod)) ** -gamma
