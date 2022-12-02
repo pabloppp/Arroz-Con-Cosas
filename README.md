@@ -51,7 +51,7 @@ All the code for training the clip2img model is [available here](scripts/train_v
 
 ## OpenCLIP H Prior v1
 
-The latest clip2img checkpoint, trained for 352K batches of 512 images with resolution 512x512 (on LAION-5B clean) is available to [download here](https://drive.google.com/file/d/1-BEpLF9XCh9CE80rvtXdsSdu5YO9FQan/view?usp=share_link)
+The latest prior checkpoint, trained for 352K batches of 512 images with resolution 512x512 (on LAION-5B clean) is available to [download here](https://drive.google.com/file/d/1-BEpLF9XCh9CE80rvtXdsSdu5YO9FQan/view?usp=share_link)
 
 If you want to resume the training, the raw checkpoints (including optimizer, ema/base models, etc) are [available here](https://drive.google.com/drive/folders/18-3pXyszuZrRmvYvxXB3jjIDalZwTFni?usp=share_link)
 
