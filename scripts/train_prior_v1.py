@@ -167,7 +167,7 @@ def train(gpu_id, world_size, n_nodes):
                 else:
                     text_embeddings = clip_model.encode_text(captions).float()
                 
-            t = torch.rand(images.size(0), device=device)
+            t = 1-torch.rand(images.size(0), device=device)
             noised_image_embeddings, noise = diffuzz.diffuse(image_embeddings, t)
 
         with torch.cuda.amp.autocast():

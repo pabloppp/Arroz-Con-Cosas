@@ -173,7 +173,7 @@ def train(gpu_id, world_size, n_nodes):
                 else:
                     image_embeddings = clip_model.encode_image(clip_preprocess(images)).float()
                 
-            t = torch.rand(images.size(0), device=device)
+            t = 1-torch.rand(images.size(0), device=device)
             qe = to_latent(images, vqmodel)
             noised_xq, noise = diffuzz.diffuse(qe, t)
 
@@ -222,7 +222,7 @@ def train(gpu_id, world_size, n_nodes):
             with torch.no_grad():
                 image_embeddings = clip_model.encode_image(clip_preprocess(images)).float()
                 
-                t = torch.rand(images.size(0), device=device)
+                t = 1-torch.rand(images.size(0), device=device)
                 qe = to_latent(images, vqmodel)
                 noised_xq, noise = diffuzz.diffuse(qe, t)
 
