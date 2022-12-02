@@ -1,3 +1,5 @@
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1LLMH3RdhCNjFdN4SBDmY2ozMvp5nnR0U?usp=sharing)
+
 # Arroz Con Cosas
 The name of this repository is Spanish for 'rice with things'. This is how people from Valencia call anything that's not the "original Valencian Paella". 
 Since this repository uses some of the core elements of [Paella](https://github.com/dome272/Paella/blob/main/modules.py)'s architecture, but is also not fully Paella, the name Arroz Con Cosas was a perfect fit.
@@ -8,6 +10,8 @@ Since this repository uses some of the core elements of [Paella](https://github.
 
 ## Motivation
 With this repository, our goal is not to build a new SOTA model, but instead to showcase a simple and easy to read model/architecture & small training code to allow anyone to train/finetune/tweak their custom Latent Diffusion Model with minimal effort. 
+
+![](figures/sampling.png)
 
 You'll find 2 distinct models here: a **clip2img** model that will turn a CLIP image embedding into an image, and a **prior** that will turn an CLIP text embedding into a CLIP image embedding. The main reason for this is to provide flexibility when finetuning, maybe you want to train your own image generator and use only our prior, or maybe you want to use our generator, but create your own prior that generates CLIP image embeddings from another input, like audio, or EEG signals! 
 
@@ -72,6 +76,9 @@ All the code for training the prior model is [available here](scripts/train_prio
 ## Sampling
 
 We will try to keep adding more references as we improve the models, for example for image variations (which is pretty straightforward with our generator), DDIM inversion for style transfer, and model finetunings like super resolution, or any other thing that we can come up with.
+
+![](figures/window.png)
+![](figures/pagoda.png)
 
 As of today, we provide a [simple notebook for tex2img ](example_text2img.ipynb) showing how to sample from the prior and the generator.
 
