@@ -30,9 +30,12 @@ pip install git+https://github.com/pabloppp/Arroz-Con-Cosas -U
 
 ## CLIP2Img v1
 
-The latest clip2img checkpoint, trained for only 288K batches of 128 images with resolution 512x512 (on LAION-5B clean) is available to [download  here](https://drive.google.com/file/d/1-9Hm3n-I6H1ekKsF-_hGtQInXXPZGd3o/view?usp=share_link)
+The latest clip2img checkpoint, trained for 500K batches of 128 images with resolution 512x512 (on LAION-5B clean) is available to [download  here](https://drive.google.com/file/d/16ZJ3ZVbMYe_GpxIAIfhx1AA66n60QLYM/view?usp=sharing)
 
 The vqGAN checkpoint is [available here](https://drive.google.com/file/d/1G3CR0uZ7NdmE4Zj7oxg50KPwuZcq-wzB/view?usp=share_link)
+
+**Other checkpoints:**   
+288K batches of 128 images with resolution 512x512 (on LAION-5B clean) is available to [download  here](https://drive.google.com/file/d/1-9Hm3n-I6H1ekKsF-_hGtQInXXPZGd3o/view?usp=share_link)
 
 If you want to resume the training, the raw checkpoints (including optimizer, ema/base models, etc) are [available here](https://drive.google.com/drive/folders/18-3pXyszuZrRmvYvxXB3jjIDalZwTFni?usp=share_link)
 
@@ -55,7 +58,10 @@ All the code for training the clip2img model is [available here](scripts/train_v
 
 ## OpenCLIP H Prior v1
 
-The latest prior checkpoint, trained for 352K batches of 512 images with resolution 512x512 (on LAION-5B clean) is available to [download here](https://drive.google.com/file/d/1-BEpLF9XCh9CE80rvtXdsSdu5YO9FQan/view?usp=share_link)
+The latest prior checkpoint, trained for 772K batches of 512 images with resolution 512x512 (on LAION-5B clean) is available to [download here](https://drive.google.com/file/d/1--b6uAM8P4f8IuQ806ypo4D2tutXDwUz/view?usp=share_link)
+
+**Other checkpoints:**   
+Trained for 352K batches of 512 images with resolution 512x512 (on LAION-5B clean) is available to [download here](https://drive.google.com/file/d/1-BEpLF9XCh9CE80rvtXdsSdu5YO9FQan/view?usp=share_link)
 
 If you want to resume the training, the raw checkpoints (including optimizer, ema/base models, etc) are [available here](https://drive.google.com/drive/folders/18-3pXyszuZrRmvYvxXB3jjIDalZwTFni?usp=share_link)
 
