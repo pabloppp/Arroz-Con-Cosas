@@ -2,18 +2,14 @@ import torch
 
 # Custom simplified foward/backward diffusion (cosine schedule)
 class Diffuzz():
-    def __init__(self, s=0.008, device="cpu", fixed_clamp=False):
+    def __init__(self, s=0.008, device="cpu"):
         self.device = device
         self.s = torch.tensor([s]).to(device)
         self._init_alpha_cumprod = torch.cos(self.s / (1 + self.s) * torch.pi * 0.5) ** 2
-        self.fixed_clamp = fixed_clamp
 
     def _alpha_cumprod(self, t):
         alpha_cumprod = torch.cos((t + self.s) / (1 + self.s) * torch.pi * 0.5) ** 2 / self._init_alpha_cumprod
-        if self.fixed_clamp:
-            return alpha_cumprod.clamp(2.4287349909002387e-09, 0.9999586939811707)
-        else:
-            return alpha_cumprod.clamp(0.0001, 0.9999) 
+        return alpha_cumprod.clamp(0.0001, 0.9999) 
 
     def diffuse(self, x, t, noise=None): # t -> [0, 1]
         if noise is None:
@@ -27,7 +23,7 @@ class Diffuzz():
         return sampler(x, t, t_prev, noise)
         
     def sample(self, model, model_inputs, shape, t_start=1.0, t_end=0.0, timesteps=20, x_init=None, cfg=3.0, unconditional_inputs=None, sampler='ddpm'):
-        r_range = torch.linspace(t_start, t_end, timesteps+1)[:, None].expand(-1, shape[0] if x_init is None else x_init.size(0)).to(self.device)
+        r_range = torch.linspace(t_start, t_end, timesteps+2)[1:][:, None].expand(-1, shape[0] if x_init is None else x_init.size(0)).to(self.device)
         # --- select the sampler
         if isinstance(sampler, str):
             if sampler in sampler_dict:
