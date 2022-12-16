@@ -42,13 +42,30 @@ class ModulatedLayerNorm(nn.Module):
         x = x.permute(0, 3, 1, 2) if self.channels_first else x
         return x
 
-class ResBlock(nn.Module):
-    def __init__(self, c, c_hidden, c_cond=0, c_skip=0, scaler=None, layer_scale_init_value=1e-6):
+class Attention2D(nn.Module):
+    def __init__(self, c, nhead=8):
         super().__init__()
-        self.depthwise = nn.Sequential(
-            nn.ReflectionPad2d(1),
-            nn.Conv2d(c, c, kernel_size=3, groups=c)
-        )
+        self.ln = nn.LayerNorm(c)
+        self.attn = torch.nn.MultiheadAttention(c, nhead, bias=True, batch_first=True)
+
+    def forward(self, x):
+        orig_shape = x.shape
+        x = x.view(x.size(0), x.size(1), -1).permute(0, 2, 1) # Bx4xHxW -> Bx(HxW)x4
+        norm_x = self.ln(x) 
+        x = x + self.attn(norm_x, norm_x, norm_x, need_weights=False)[0]
+        x = x.permute(0, 2, 1).view(*orig_shape)
+        return x
+
+class ResBlock(nn.Module):
+    def __init__(self, c, c_hidden, c_cond=0, c_skip=0, scaler=None, layer_scale_init_value=1e-6, use_attention=False):
+        super().__init__()
+        if use_attention:
+            self.depthwise = Attention2D(c)
+        else:
+            self.depthwise = nn.Sequential(
+                nn.ReflectionPad2d(1),
+                nn.Conv2d(c, c, kernel_size=3, groups=c)
+            )
         self.ln = ModulatedLayerNorm(c, channels_first=False)
         self.channelwise = nn.Sequential(
             nn.Linear(c+c_skip, c_hidden),
@@ -274,6 +291,265 @@ class DiffusionModel(nn.Module):
     def update_weights_ema(self, src_model, beta=0.999):
         for self_params, src_params in zip(self.parameters(), src_model.parameters()):
             self_params.data = self_params.data * beta + src_params.data * (1-beta)
+
+class MLPMixerBlock(nn.Module):
+    def __init__(self, c, seq_len):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(c)
+        self.patch_shuffle = nn.Sequential(
+            nn.Linear(seq_len, seq_len*4),
+            nn.GELU(),
+            nn.Linear(seq_len*4, seq_len),
+        )
+        self.ln2 = nn.LayerNorm(c)
+        self.channel_shuffle = nn.Sequential(
+            nn.Linear(c, c*4),
+            nn.GELU(),
+            nn.Linear(c*4, c),
+        )
+
+    def forward(self, x):
+        t = self.ln1(x).transpose(1, 2)
+        t = self.patch_shuffle(t)
+        t = t.transpose(1, 2)
+        x = x + t
+        t = self.ln2(x)
+        t = self.channel_shuffle(t)
+        x = x + t
+        return x
+
+class DiffusioMixerModel(nn.Module):
+    def __init__(self, c_hidden=768, c_r=64, c_embd=1024, down_levels=[1, 2, 8], up_levels=[8, 2, 1], mixer_blocks=12):
+        super().__init__()
+        self.c_r = c_r
+        self.up_idx_start = sum(down_levels)
+        c_levels = [c_hidden//(2**i) for i in reversed(range(len(down_levels)))]
+        self.embedding = nn.Conv2d(4, c_levels[0], kernel_size=1)
+
+        self.mixer_queries = nn.Parameter(torch.randn(1, sum(down_levels)+sum(up_levels), c_embd+c_r))
+        self.mixer_blocks = nn.Sequential(*[MLPMixerBlock(c_embd+c_r, sum(down_levels)+sum(up_levels)+1) for _ in range(mixer_blocks)])
+        
+        # DOWN BLOCKS
+        self.down_blocks = nn.ModuleList()
+        for i, num_blocks in enumerate(down_levels):
+            blocks = []
+            if i > 0:
+                blocks.append(nn.Conv2d(c_levels[i-1], c_levels[i], kernel_size=4, stride=2, padding=1))
+            for _ in range(num_blocks):
+                block = ResBlock(c_levels[i], c_levels[i]*4, c_r+c_embd)
+                block.channelwise[-1].weight.data *= np.sqrt(1 / sum(down_levels))
+                blocks.append(block)
+            self.down_blocks.append(nn.ModuleList(blocks))
+
+        # UP BLOCKS
+        self.up_blocks = nn.ModuleList()
+        for i, num_blocks in enumerate(up_levels):
+            blocks = []
+            for j in range(num_blocks):
+                block = ResBlock(c_levels[len(c_levels)-1-i], c_levels[len(c_levels)-1-i]*4, c_r+c_embd, c_levels[len(c_levels)-1-i] if (j == 0 and i > 0) else 0)
+                block.channelwise[-1].weight.data *= np.sqrt(1 / sum(up_levels))
+                blocks.append(block)
+            if i < len(up_levels)-1:
+                blocks.append(nn.ConvTranspose2d(c_levels[len(c_levels)-1-i], c_levels[len(c_levels)-2-i], kernel_size=4, stride=2, padding=1))
+            self.up_blocks.append(nn.ModuleList(blocks))
+            
+        self.clf = nn.Conv2d(c_levels[0], 4, kernel_size=1)
+
+    def gen_r_embedding(self, r, max_positions=10000):
+        r = r * max_positions
+        half_dim = self.c_r // 2
+        emb = math.log(max_positions) / (half_dim - 1)
+        emb = torch.arange(half_dim, device=r.device).float().mul(-emb).exp()
+        emb = r[:, None] * emb[None, :]
+        emb = torch.cat([emb.sin(), emb.cos()], dim=1)
+        if self.c_r % 2 == 1:  # zero pad
+            emb = nn.functional.pad(emb, (0, 1), mode='constant')
+        return emb
+
+    def _encode_s(self, s, r):
+        r_embed = self.gen_r_embedding(r)
+        s = torch.cat([s, r_embed], dim=1)[:, None, :]
+        s = torch.cat([self.mixer_queries.expand(s.size(0), -1, -1), s], dim=1)
+        return self.mixer_blocks(s)[:, :, :, None, None]
+    
+    def _down_encode_(self, x, s):
+        level_outputs = []
+        s_idx = 0
+        for i, blocks in enumerate(self.down_blocks):
+            for block in blocks:
+                if isinstance(block, ResBlock):
+                    x = block(x, s[:, s_idx])
+                    s_idx += 1
+                else:
+                    x = block(x)
+            level_outputs.insert(0, x)
+        return level_outputs
+
+    def _up_decode(self, level_outputs, s):
+        x = level_outputs[0]
+        s_idx = self.up_idx_start
+        for i, blocks in enumerate(self.up_blocks):
+            for j, block in enumerate(blocks):
+                if isinstance(block, ResBlock):
+                    if i > 0 and j == 0:
+                        x = block(x, s[:, s_idx], level_outputs[i])
+                    else:
+                        x = block(x, s[:, s_idx])
+                    s_idx += 1
+                else:
+                    x = block(x)
+        return x
+
+    def forward(self, x, r, c): # r is a uniform value between 0 and 1
+        x = self.embedding(x)
+        s = self._encode_s(c, r)
+        level_outputs = self._down_encode_(x, s)
+        x = self._up_decode(level_outputs, s)
+        x = self.clf(x)
+        return x
+
+    def update_weights_ema(self, src_model, beta=0.999):
+        for self_params, src_params in zip(self.parameters(), src_model.parameters()):
+            self_params.data = self_params.data * beta + src_params.data * (1-beta)
+
+class DiffusioMixerAttnModel(nn.Module):
+    def __init__(self, c_hidden=768, c_r=64, c_embd=1024, down_levels=[1, 2, 8], up_levels=[8, 2, 1], mixer_blocks=12, down_attn=[[], [], [4, 6]], up_attn=[[1, 3], [], []]):
+        super().__init__()
+        self.c_r = c_r
+        self.up_idx_start = sum(down_levels)
+        c_levels = [c_hidden//(2**i) for i in reversed(range(len(down_levels)))]
+        self.embedding = nn.Conv2d(4, c_levels[0], kernel_size=1)
+
+        self.mixer_queries = nn.Parameter(torch.randn(1, sum(down_levels)+sum(up_levels), c_embd+c_r))
+        self.mixer_blocks = nn.Sequential(*[MLPMixerBlock(c_embd+c_r, sum(down_levels)+sum(up_levels)+1) for _ in range(mixer_blocks)])
+        
+        # DOWN BLOCKS
+        self.down_blocks = nn.ModuleList()
+        for i, num_blocks in enumerate(down_levels):
+            blocks = []
+            if i > 0:
+                blocks.append(nn.Conv2d(c_levels[i-1], c_levels[i], kernel_size=4, stride=2, padding=1))
+            for j in range(num_blocks):
+                block = ResBlock(c_levels[i], c_levels[i]*4, c_r+c_embd, use_attention=j in down_attn[i])
+                block.channelwise[-1].weight.data *= np.sqrt(1 / sum(down_levels))
+                blocks.append(block)
+            self.down_blocks.append(nn.ModuleList(blocks))
+
+        # UP BLOCKS
+        self.up_blocks = nn.ModuleList()
+        for i, num_blocks in enumerate(up_levels):
+            blocks = []
+            for j in range(num_blocks):
+                block = ResBlock(c_levels[len(c_levels)-1-i], c_levels[len(c_levels)-1-i]*4, c_r+c_embd, c_levels[len(c_levels)-1-i] if (j == 0 and i > 0) else 0, use_attention=j in up_attn[i])
+                block.channelwise[-1].weight.data *= np.sqrt(1 / sum(up_levels))
+                blocks.append(block)
+            if i < len(up_levels)-1:
+                blocks.append(nn.ConvTranspose2d(c_levels[len(c_levels)-1-i], c_levels[len(c_levels)-2-i], kernel_size=4, stride=2, padding=1))
+            self.up_blocks.append(nn.ModuleList(blocks))
+            
+        self.clf = nn.Conv2d(c_levels[0], 4, kernel_size=1)
+
+    def gen_r_embedding(self, r, max_positions=10000):
+        r = r * max_positions
+        half_dim = self.c_r // 2
+        emb = math.log(max_positions) / (half_dim - 1)
+        emb = torch.arange(half_dim, device=r.device).float().mul(-emb).exp()
+        emb = r[:, None] * emb[None, :]
+        emb = torch.cat([emb.sin(), emb.cos()], dim=1)
+        if self.c_r % 2 == 1:  # zero pad
+            emb = nn.functional.pad(emb, (0, 1), mode='constant')
+        return emb
+
+    def _encode_s(self, s, r):
+        r_embed = self.gen_r_embedding(r)
+        s = torch.cat([s, r_embed], dim=1)[:, None, :]
+        s = torch.cat([self.mixer_queries.expand(s.size(0), -1, -1), s], dim=1)
+        return self.mixer_blocks(s)[:, :, :, None, None]
+    
+    def _down_encode_(self, x, s):
+        level_outputs = []
+        s_idx = 0
+        for i, blocks in enumerate(self.down_blocks):
+            for block in blocks:
+                if isinstance(block, ResBlock):
+                    x = block(x, s[:, s_idx])
+                    s_idx += 1
+                else:
+                    x = block(x)
+            level_outputs.insert(0, x)
+        return level_outputs
+
+    def _up_decode(self, level_outputs, s):
+        x = level_outputs[0]
+        s_idx = self.up_idx_start
+        for i, blocks in enumerate(self.up_blocks):
+            for j, block in enumerate(blocks):
+                if isinstance(block, ResBlock):
+                    if i > 0 and j == 0:
+                        x = block(x, s[:, s_idx], level_outputs[i])
+                    else:
+                        x = block(x, s[:, s_idx])
+                    s_idx += 1
+                else:
+                    x = block(x)
+        return x
+
+    def forward(self, x, r, c): # r is a uniform value between 0 and 1
+        x = self.embedding(x)
+        s = self._encode_s(c, r)
+        level_outputs = self._down_encode_(x, s)
+        x = self._up_decode(level_outputs, s)
+        x = self.clf(x)
+        return x
+
+    def update_weights_ema(self, src_model, beta=0.999):
+        for self_params, src_params in zip(self.parameters(), src_model.parameters()):
+            self_params.data = self_params.data * beta + src_params.data * (1-beta)
+
+class MixerDiffusion(nn.Module):
+    def __init__(self, c_hidden=768, c_r=64, c_embd=1024, patch_size=4, seq_len=64, levels=40):
+        super().__init__()
+        self.c_r = c_r
+        self.embedding = nn.Conv2d(4, c_hidden//patch_size, kernel_size=1)
+        self.patcher = nn.Conv2d(c_hidden//patch_size, c_hidden, kernel_size=patch_size, stride=patch_size)
+
+        self.c_mappers = nn.ModuleList([nn.Linear(c_embd+c_r, c_hidden) for _ in range(levels)])
+        self.levels = nn.ModuleList([MLPMixerBlock(c_hidden, seq_len+1) for _ in range(levels)])
+        
+        self.un_patcher = nn.ConvTranspose2d(c_hidden, c_hidden//patch_size, kernel_size=patch_size, stride=patch_size)
+        self.clf = nn.Conv2d(c_hidden//patch_size, 4, kernel_size=1)
+
+    def gen_r_embedding(self, r, max_positions=10000):
+        r = r * max_positions
+        half_dim = self.c_r // 2
+        emb = math.log(max_positions) / (half_dim - 1)
+        emb = torch.arange(half_dim, device=r.device).float().mul(-emb).exp()
+        emb = r[:, None] * emb[None, :]
+        emb = torch.cat([emb.sin(), emb.cos()], dim=1)
+        if self.c_r % 2 == 1:  # zero pad
+            emb = nn.functional.pad(emb, (0, 1), mode='constant')
+        return emb
+
+    def forward(self, x, r, c): # r is a uniform value between 0 and 1
+        r_embed = self.gen_r_embedding(r) 
+        x = self.embedding(x)
+        x = self.patcher(x)
+
+        orig_shape = x.shape
+        x = x.permute(0, 2, 3, 1).view(x.size(0), -1, x.size(1))
+        for c_mapper, level in zip(self.c_mappers, self.levels):
+            s = c_mapper(torch.cat([c, r_embed], dim=1)).unsqueeze(1)
+            x = torch.cat([s, x], dim=1)
+            x = level(x)[:, 1:]
+        x = x.view(x.size(0), orig_shape[-2], orig_shape[-1], x.size(-1)).permute(0, 3, 1, 2)
+        
+        x = self.un_patcher(x)
+        x = self.clf(x)
+        return x
+
+    def update_weights_ema(self, src_model, beta=0.999):
+        for self_params, src_params in zip(self.parameters(), src_model.parameters()):
+            self_params.data = self_params.data * beta + src_params.data * (1-beta) 
 
 # ----
     

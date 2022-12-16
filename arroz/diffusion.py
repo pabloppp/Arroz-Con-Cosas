@@ -2,14 +2,18 @@ import torch
 
 # Custom simplified foward/backward diffusion (cosine schedule)
 class Diffuzz():
-    def __init__(self, s=0.008, device="cpu"):
+    def __init__(self, s=0.008, device="cpu", fixed_clamp=False):
         self.device = device
         self.s = torch.tensor([s]).to(device)
         self._init_alpha_cumprod = torch.cos(self.s / (1 + self.s) * torch.pi * 0.5) ** 2
+        self.fixed_clamp = fixed_clamp
 
     def _alpha_cumprod(self, t):
         alpha_cumprod = torch.cos((t + self.s) / (1 + self.s) * torch.pi * 0.5) ** 2 / self._init_alpha_cumprod
-        return alpha_cumprod.clamp(0.0001, 0.9999)
+        if self.fixed_clamp:
+            return alpha_cumprod.clamp(2.4287349909002387e-09, 0.9999586939811707)
+        else:
+            return alpha_cumprod.clamp(0.0001, 0.9999) 
 
     def diffuse(self, x, t, noise=None): # t -> [0, 1]
         if noise is None:
