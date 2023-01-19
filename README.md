@@ -4,8 +4,8 @@
 The name of this repository is Spanish for 'rice with things'. This is how people from Valencia call anything that's not the "original Valencian Paella". 
 Since this repository uses some of the core elements of [Paella](https://github.com/dome272/Paella/blob/main/modules.py)'s architecture, but is also not fully Paella, the name Arroz Con Cosas was a perfect fit.
 
-![](figures/elon_300k_steps.png)
-![](figures/old_lady_300k_steps.png)
+![](figures/pagoda.png)
+![](figures/elon.png)
 ![](figures/watercolor_bowl.png)
 
 ## Motivation
@@ -29,7 +29,7 @@ pip install git+https://github.com/pabloppp/Arroz-Con-Cosas -U
 
 ## CLIP2Img v5 - 1B+ATTN (1B params)
 
-The latest clip2img checkpoint, trained for 999K batches of 2048 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-6HgdhdcTS_L8BF9gbf669lf7l7-bVxo/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/1QvNTawDntYaKmasBHr_2UTFGKH2J0RSy/view?usp=share_link)
+The latest clip2img checkpoint, trained for 801K batches of 2048 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-25hqygHsDXAG8BRezphnF4zSwf9xOoC/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/1-e_mXPcwpi0m_hQLg4MskWhWriOYWirT/view?usp=share_link)
 
 The vqGAN checkpoint is [available here](https://drive.google.com/file/d/1G3CR0uZ7NdmE4Zj7oxg50KPwuZcq-wzB/view?usp=share_link)
 
@@ -101,7 +101,8 @@ All the code for training the prior model is [available here](scripts/train_prio
 We will try to keep adding more references as we improve the models, for example for image variations (which is pretty straightforward with our generator), DDIM inversion for style transfer, and model finetunings like super resolution, or any other thing that we can come up with.
 
 ![](figures/window.png)
-![](figures/pagoda.png)
+![](figures/old_lady.png)
+![](figures/sparrow.png)
 
 As of today, we provide a [simple notebook for tex2img ](example_text2img.ipynb) showing how to sample from the prior and the generator.
 
