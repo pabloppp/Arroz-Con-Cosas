@@ -15,7 +15,7 @@ setup(
         'torchvision',
         'numpy==1.*',
         'pytorch_wavelets @ git+https://github.com/fbcotter/pytorch_wavelets',
-        'PyWavelets~=1.3',
+        'PyWavelets',
         'open_clip_torch~=2.7'
     ],
     include_package_data=True,
