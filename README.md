@@ -1,4 +1,4 @@
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1LLMH3RdhCNjFdN4SBDmY2ozMvp5nnR0U?usp=sharing)
+[![V5: Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/10jyj6SKWzZqomWFkcUhHbJJnBPVZwFBD?usp=sharing)
 
 # Arroz Con Cosas
 The name of this repository is Spanish for 'rice with things'. This is how people from Valencia call anything that's not the "original Valencian Paella". 
@@ -27,8 +27,32 @@ pip install git+https://github.com/pabloppp/Arroz-Con-Cosas -U
 
 **/!\ Keep in mind that this is a WIP and things might not work perfectly all the time. We'll try to keep updating the code & checkpoints.**
 
+## CLIP2Img v5 - 1B+ATTN (1B params)
 
-## CLIP2Img v1
+The latest clip2img checkpoint, trained for 999K batches of 2048 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-6HgdhdcTS_L8BF9gbf669lf7l7-bVxo/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/1QvNTawDntYaKmasBHr_2UTFGKH2J0RSy/view?usp=share_link)
+
+The vqGAN checkpoint is [available here](https://drive.google.com/file/d/1G3CR0uZ7NdmE4Zj7oxg50KPwuZcq-wzB/view?usp=share_link)
+
+### Architecture
+
+The model's architecture used here is same as [Paella](https://github.com/dome272/Paella/blob/main/modules.py) with very minor changes to the inputs & outputs shape so it works directly with latents instead of tokens, and the addition of SelfAttention blocks after some of the convolutions.
+
+The vqGAN though is custom, and currently only trained on a very small dataset of 7K watercolor images so it's probably a limitation of this model, but it still shows great reconstruction capabilities in any type of picture, with some minor tendency to make watercolor textures.
+
+### Training
+
+The model is trained with a latent diffusion objective:  
+The images are encoded into latents using the vqGAN, then gaussian noise is added to it, and the model learns to predict the added noise using a conditioning embedding, in this case a CLIP image embedding.
+
+The [diffusion code](arroz/diffusion.py) to add/remove the gausian noise is a custom, extremely simplified, implementation that works on continuous timesteps (so t is a value between 0 and 1 instead of a discrete step number). It reduces a lot of the complexity of many of the current available diffusion implementations to hopefully make it a bit more accessible.
+
+All the code for training the clip2img model is [available here](scripts/train_v5_1b_attn.py)
+
+<hr>
+
+
+## CLIP2Img v1 (600M params)
+[![V5: Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1LLMH3RdhCNjFdN4SBDmY2ozMvp5nnR0U?usp=sharing)
 
 The latest clip2img checkpoint, trained for 500K batches of 128 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-1U9Rx5NKlP5CDtPGWp5zIlbgHqngaJs/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/16ZJ3ZVbMYe_GpxIAIfhx1AA66n60QLYM/view?usp=sharing)
 
@@ -41,22 +65,11 @@ If you want to resume the training, the raw checkpoints (including optimizer, em
 
 ### Architecture
 
-The model's architecture used here is same as [Paella](https://github.com/dome272/Paella/blob/main/modules.py) with very minor changes to the inputs & outputs shape so it works directly with latents instead of tokens.
-
-The vqGAN though is custom, and currently only trained on a very small dataset of 7K watercolor images so it's probably a limitation of this model, but it still shows great reconstruction capabilities in any type of picture, with some minor tendency to make watercolor textures.
-
-### Training
-
-The model is trained with a latent diffusion objective:  
-The images are encoded into latents using the vqGAN, then gaussian noise is added to it, and the model learns to predict the added noise using a conditioning embedding, in this case a CLIP image embedding.
-
-The [diffusion code](arroz/diffusion.py) to add/remove the gausian noise is a custom, extremely simplified, implementation that works on continuous timesteps (so t is a value between 0 and 1 instead of a discrete step number). It reduces a lot of the complexity of many of the current available diffusion implementations to hopefully make it a bit more accessible.
-
-All the code for training the clip2img model is [available here](scripts/train_v1.py)
+The model's architecture used here is same as the V5 model, but it doesn't use any attention layer, so it's fully convolutional instead.
 
 <hr>
 
-## OpenCLIP H Prior v1
+## OpenCLIP H Prior v1 (900M params)
 
 The latest prior checkpoint, trained for 1500K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-0BQNFXZZMpcPRY-h-0d2OTAGDJY6Vbw/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/17kVP4JqooGgvor_GomZ-uZj9IzJevulg/view?usp=share_link)
 
