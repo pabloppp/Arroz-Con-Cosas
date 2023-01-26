@@ -27,6 +27,8 @@ pip install git+https://github.com/pabloppp/Arroz-Con-Cosas -U
 
 **/!\ Keep in mind that this is a WIP and things might not work perfectly all the time. We'll try to keep updating the code & checkpoints.**
 
+<hr>
+
 ## CLIP2Img v5 - 1B+ATTN (1B params)
 
 The latest clip2img checkpoint, trained for 801K batches of 2048 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-25hqygHsDXAG8BRezphnF4zSwf9xOoC/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/1-e_mXPcwpi0m_hQLg4MskWhWriOYWirT/view?usp=share_link)
