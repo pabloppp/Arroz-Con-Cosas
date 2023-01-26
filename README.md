@@ -74,9 +74,7 @@ The model's architecture used here is same as the V5 model, but it doesn't use a
 The latest prior checkpoint, trained for 1500K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here (fp16)](https://drive.google.com/file/d/1-0BQNFXZZMpcPRY-h-0d2OTAGDJY6Vbw/view?usp=share_link) [or here (fp32)](https://drive.google.com/file/d/17kVP4JqooGgvor_GomZ-uZj9IzJevulg/view?usp=share_link)
 
 **Other checkpoints:**   
-Trained for 1191K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here](https://drive.google.com/file/d/1F6J8Gvw7K4wu8YbnnxgJ3oN2sFtGnfvA/view?usp=share_link)
-
-Trained for 772K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here](https://drive.google.com/file/d/1--b6uAM8P4f8IuQ806ypo4D2tutXDwUz/view?usp=share_link)
+Trained for 512K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai)) is available to [download here](https://drive.google.com/file/d/1-A7k8ACRQ2uFDrpaUcsNh094DfOIvm_d/view?usp=share_link)
 
 Trained for 352K batches of 512 images with resolution 512x512 (on LAION-A, curated by [DeepFloydAI](https://mobile.twitter.com/deepfloydai) is available to [download here](https://drive.google.com/file/d/1-BEpLF9XCh9CE80rvtXdsSdu5YO9FQan/view?usp=share_link)
 
